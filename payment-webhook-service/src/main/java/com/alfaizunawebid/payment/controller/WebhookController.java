@@ -1,4 +1,4 @@
-package com.alfaizunawebid.baseapp.controller;
+package com.alfaizunawebid.payment.controller;
 
 import java.util.Map;
 
@@ -9,23 +9,16 @@ import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import com.alfaizunawebid.baseapp.dto.WebhookPayload;
-import com.alfaizunawebid.baseapp.security.HmacSignatureValidator;
-import com.alfaizunawebid.baseapp.service.IdempotencyService;
-import com.alfaizunawebid.baseapp.service.OrderProcessingService;
+import com.alfaizunawebid.payment.dto.WebhookPayload;
+import com.alfaizunawebid.payment.security.HmacSignatureValidator;
+import com.alfaizunawebid.payment.service.IdempotencyService;
+import com.alfaizunawebid.payment.service.PaymentWebhookService;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
-/**
- * Controller untuk menangani incoming payment webhook callbacks.
- * Menerapkan verifikasi HMAC signature dan Redis idempotency lock.
- * ---
- * Controller handling incoming payment webhook callbacks.
- * Enforces HMAC signature verification and Redis idempotency locks.
- */
 @Slf4j
 @RestController
 @RequestMapping("/api/v1/webhooks")
@@ -34,7 +27,7 @@ public class WebhookController {
 
     private final HmacSignatureValidator signatureValidator;
     private final IdempotencyService idempotencyService;
-    private final OrderProcessingService orderProcessingService;
+    private final PaymentWebhookService paymentWebhookService;
     private final ObjectMapper objectMapper;
 
     @PostMapping("/payment")
@@ -44,12 +37,10 @@ public class WebhookController {
     ) {
         log.info("Received payment webhook notification");
 
-        // Langkah 1: Verifikasi HMAC Signature (Menolak request palsu)
-        // Step 1: Verify HMAC Signature (Rejects spoofed/forged requests)
+        // 1. Verifikasi HMAC Signature
         signatureValidator.validateSignature(rawPayload, signature);
 
-        // Langkah 2: Parse raw JSON string ke DTO WebhookPayload
-        // Step 2: Parse raw JSON string to WebhookPayload DTO
+        // 2. Parse raw JSON string ke DTO WebhookPayload
         WebhookPayload payload;
         try {
             payload = objectMapper.readValue(rawPayload, WebhookPayload.class);
@@ -63,8 +54,7 @@ public class WebhookController {
 
         String transactionId = payload.getTransactionId();
 
-        // Langkah 3: Redis Idempotency Check (Mencegah double-processing)
-        // Step 3: Redis Idempotency Check (Prevents duplicate processing)
+        // 3. Redis Idempotency Check
         boolean lockAcquired = idempotencyService.acquireLock(transactionId);
         if (!lockAcquired) {
             log.info("Duplicate webhook callback received for transaction [{}]. Returning 200 OK immediately.",
@@ -75,13 +65,12 @@ public class WebhookController {
             ));
         }
 
-        // Langkah 4: Proses bisnis transaksi order
-        // Step 4: Execute order business processing
+        // 4. Proses pencatatan audit log & bisnis payment
         try {
-            orderProcessingService.processWebhook(payload, rawPayload);
+            paymentWebhookService.processPaymentWebhook(payload, rawPayload);
             idempotencyService.markAsCompleted(transactionId);
         } catch (Exception e) {
-            log.error("Internal error processing order for transaction [{}]. Releasing lock for retry.",
+            log.error("Internal error processing webhook for transaction [{}]. Releasing lock for retry.",
                     transactionId, e);
             idempotencyService.releaseLock(transactionId);
             throw e;

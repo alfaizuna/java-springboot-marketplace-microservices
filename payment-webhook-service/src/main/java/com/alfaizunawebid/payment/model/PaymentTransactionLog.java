@@ -1,14 +1,15 @@
-package com.alfaizunawebid.baseapp.model;
+package com.alfaizunawebid.payment.model;
 
 import java.math.BigDecimal;
-import java.time.Instant;
+import java.time.OffsetDateTime;
+
+import org.hibernate.annotations.CreationTimestamp;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
-import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -16,18 +17,13 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
-/**
- * Entity audit log untuk setiap notifikasi webhook yang diterima dari payment gateway.
- * ---
- * Audit log entity for every webhook notification received from the payment gateway.
- */
 @Entity
 @Table(name = "payment_transaction_logs")
 @Getter
 @Setter
-@Builder
 @NoArgsConstructor
 @AllArgsConstructor
+@Builder
 public class PaymentTransactionLog {
 
     @Id
@@ -52,11 +48,7 @@ public class PaymentTransactionLog {
     @Column(name = "raw_payload", columnDefinition = "TEXT")
     private String rawPayload;
 
+    @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
-    private Instant createdAt;
-
-    @PrePersist
-    protected void onCreate() {
-        this.createdAt = Instant.now();
-    }
+    private OffsetDateTime createdAt;
 }
