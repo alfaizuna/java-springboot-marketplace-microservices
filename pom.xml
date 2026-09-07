@@ -24,7 +24,7 @@
         <module>auth-service</module>
         <module>payment-webhook-service</module>
         <module>order-service</module>
-        <!-- nanti tambah: product-service -->
+        <module>product-service</module>
     </modules>
 
     <properties>
