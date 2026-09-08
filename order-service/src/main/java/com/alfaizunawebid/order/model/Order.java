@@ -36,6 +36,12 @@ public class Order {
     @Column(name = "order_number", nullable = false, unique = true, length = 100)
     private String orderNumber;
 
+    @Column(name = "product_sku", nullable = false, length = 100)
+    private String productSku;
+
+    @Column(nullable = false)
+    private Integer quantity;
+
     @Column(nullable = false, precision = 19, scale = 2)
     private BigDecimal amount;
 

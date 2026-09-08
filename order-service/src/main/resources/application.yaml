@@ -18,3 +18,8 @@ spring:
 payment:
   webhook:
     secret-key: ${PAYMENT_WEBHOOK_SECRET:super-secret-webhook-key-change-in-prod}
+
+# Internal service URLs (direct, not through gateway)
+services:
+  product-service:
+    url: ${PRODUCT_SERVICE_URL:http://localhost:8082}
