@@ -1,169 +1,297 @@
-# 🛡️ Secure Payment Webhook Handler & Transaction State Machine
+# 🛒 Java Spring Boot Marketplace Microservices
 
 [![Java](https://img.shields.io/badge/Java-21-orange.svg)](https://openjdk.org/)
 [![Spring Boot](https://img.shields.io/badge/Spring%20Boot-4.1.1-brightgreen.svg)](https://spring.io/projects/spring-boot)
-[![Spring Security](https://img.shields.io/badge/Spring%20Security-7.x-green.svg)](https://spring.io/projects/spring-security)
-[![Redis](https://img.shields.io/badge/Redis-7.x-red.svg)](https://redis.io/)
+[![Spring Cloud](https://img.shields.io/badge/Spring%20Cloud-2025.1.3-blue.svg)](https://spring.io/projects/spring-cloud)
+[![Spring Cloud Gateway](https://img.shields.io/badge/Gateway-WebFlux-blueviolet.svg)](https://spring.io/projects/spring-cloud-gateway)
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-blue.svg)](https://www.postgresql.org/)
-[![Testcontainers](https://img.shields.io/badge/Testcontainers-Integration%20Tests-black.svg)](https://testcontainers.com/)
+[![Redis](https://img.shields.io/badge/Redis-7.x-red.svg)](https://redis.io/)
+[![Docker](https://img.shields.io/badge/Docker-Compose-2496ED.svg)](https://docs.docker.com/compose/)
 [![Flyway](https://img.shields.io/badge/Flyway-Migrations-blueviolet.svg)](https://flywaydb.org/)
 [![License](https://img.shields.io/badge/License-MIT-lightgrey.svg)](LICENSE)
 
-An enterprise-grade, production-ready payment webhook service built with **Spring Boot 4 (Java 21)**. It solves real-world e-commerce and fintech security challenges: **payload spoofing**, **timing attacks**, **network-retry duplicate processing**, and **amount tampering fraud**.
+A **production-ready Marketplace Microservices** system built with Java 21 and Spring Boot 4. Demonstrates clean microservice decomposition, asymmetric RS256 JWT authentication, HMAC payment webhook security, and service-to-service communication — all orchestrated via Docker Compose.
 
-> 🇮🇩 *Untuk dokumentasi lengkap dalam Bahasa Indonesia dan studi kasus narasi, silakan baca [README.id.md](README.id.md).*
-
----
-
-## 🎯 The Real-World Problem & Threat Model
-
-In modern payment architectures (e.g., Midtrans, Xendit, Stripe), payment confirmations are delivered asynchronously via HTTP webhooks. Because webhooks are exposed to the public internet, they are prime targets for malicious exploits and network anomalies:
-
-```
-                              THREAT LANDSCAPE
-┌────────────────────────┐
-│ Malicious Actor        ├──────────► [ 1. Payload Spoofing / Forgery ]
-│ (Attacker)             ├──────────► [ 2. Timing Attack on Signatures ]
-└────────────────────────┘
-
-┌────────────────────────┐
-│ Payment Provider       ├──────────► [ 3. At-Least-Once Delivery / Duplicate Retries ]
-│ (Network / Gateway)    ├──────────► [ 4. Out-of-Order Webhook Delivery ]
-└────────────────────────┘
-```
-
-| Threat / Risk | Impact Without Protection | Engineered Solution |
-|---|---|---|
-| **1. Payload Spoofing** | Attacker sends forged `status: PAID` to unlock items without paying. | **HMAC-SHA256 Signature Verification** using shared secret key. |
-| **2. Timing Attacks** | Attacker measures nano-second string comparison response times to guess valid signatures. | **Constant-Time Comparison** (`MessageDigest.isEqual`). |
-| **3. Duplicate Processing** | Gateway retries cause double fulfillment (e.g., wallet credited twice). | **Atomic Idempotency Engine** powered by Redis (`SETNX` + TTL). |
-| **4. Amount Tampering** | Attacker pays Rp1.000 for a Rp1.000.000 order. | **Strict Amount Integrity Guard** against order database records. |
-| **5. Regressive States** | Delayed `EXPIRED` webhook overwrites an already `PAID` order. | **Rigid Finite State Machine (FSM)**. |
-| **6. Dispute & Compliance** | Inability to audit gateway events during customer disputes. | **Raw Payload Audit Trail** in PostgreSQL (`payment_transaction_logs`). |
+> 🇮🇩 *Dokumentasi Bahasa Indonesia: [README.id.md](README.id.md)*
 
 ---
 
-## 🏗️ Architecture & Processing Flow
+## 🏗️ Architecture Overview
 
 ```
-Payment Gateway (Midtrans / Stripe)
-       │
-       │  POST /api/v1/webhooks/payment
-       │  Headers: X-Signature: <hmac_hex>
-       ▼
-┌─────────────────────────────────────────────────────────────┐
-│ 1. Spring Security Gateway Filter                           │
-│    - Whitelists webhook endpoint from Bearer JWT filter     │
-└──────────────────────────────┬──────────────────────────────┘
-                               │
-                               ▼
-┌─────────────────────────────────────────────────────────────┐
-│ 2. HMAC-SHA256 Cryptographic Verification                   │
-│    - Calculates HMAC on raw request body                    │
-│    - Constant-time verification against timing attacks      │
-└──────────────┬───────────────────────────────┬──────────────┘
-               │ (Invalid)                     │ (Valid)
-               ▼                               ▼
-       [ 401 Unauthorized ]    ┌──────────────────────────────────────────────────┐
-                               │ 3. Redis Atomic Idempotency Check (SETNX)        │
-                               └───────────────┬──────────────────┬───────────────┘
-                                               │ (Duplicate)      │ (First-time)
-                                               ▼                  ▼
-                                     [ 200 OK (Skip DB) ] ┌────────────────────────┐
-                                                          │ 4. Order State Machine │
-                                                          │    - Amount check      │
-                                                          │    - PENDING ➔ PAID    │
-                                                          │    - Persist Audit Log │
-                                                          └───────────┬────────────┘
-                                                                      │
-                                                                      ▼
-                                                            [ 200 OK Processed ]
+                        ┌─────────────────────────────────┐
+                        │        Client / Postman          │
+                        └─────────────┬───────────────────┘
+                                      │ HTTP :8080
+                                      ▼
+                        ┌─────────────────────────────────┐
+                        │         API Gateway (8080)       │
+                        │   Spring Cloud Gateway WebFlux   │
+                        │   • RS256 JWT Validation         │
+                        │   • Route Forwarding             │
+                        │   • X-User-Email / X-User-Role   │
+                        └──┬──────┬──────┬──────┬─────────┘
+                           │      │      │      │
+              /auth,/users │      │/products    │/webhooks
+                           │      │      │      │
+              ┌────────────▼─┐  ┌─▼──────────┐  ┌▼───────────────────┐
+              │ auth-service │  │product-svc │  │payment-webhook-svc │
+              │    :8081     │  │   :8082    │  │       :8084        │
+              │  auth_db     │  │ product_db │  │    payment_db      │
+              │  Redis       │  └────────────┘  │    Redis           │
+              └──────────────┘        ▲         └────────────────────┘
+                                      │ check-stock
+                                /orders│
+                        ┌─────────────▼──────┐
+                        │   order-service    │
+                        │       :8083        │
+                        │     order_db       │
+                        └────────────────────┘
 ```
 
 ---
 
-## 🚀 Key Technical Highlights
+## 🧩 Services
 
-1. **Memory-Efficient Request Handling:**
-   Avoids `ServletInputStream` exhaustion traps by accepting the raw payload as a `String` inside the controller, computing HMAC on raw bytes without double-buffering filter overhead, and cleanly parsing via Jackson `ObjectMapper`.
-2. **Timing Attack Resistant:**
-   Uses `MessageDigest.isEqual(...)` instead of standard `String.equals(...)`, eliminating cryptographic timing side-channel vulnerabilities.
-3. **Atomic Distributed Idempotency:**
-   Leverages Redis `setIfAbsent(...)` (`SET key value NX EX ttl`) for atomic, lock-free duplicate request prevention across distributed microservice instances.
-4. **Finite State Machine & Fraud Guard:**
-   Ensures final transaction states (`PAID`) cannot be regressed by delayed out-of-order webhooks. Automatically flags orders as `FAILED` if payment amounts do not strictly match order totals.
-5. **Production Parity with Testcontainers:**
-   Comprehensive end-to-end integration tests spin up real **PostgreSQL 16** and **Redis 7** containers in Docker—guaranteeing 100% production parity without relying on in-memory mocks.
+| Service | Port | Database | Responsibilities |
+|---------|------|----------|-----------------|
+| **api-gateway** | `8080` | — | Single entry point, JWT RS256 validation, route forwarding |
+| **auth-service** | `8081` | `auth_db` | Register, Login, Refresh Token, Logout, RS256 JWT |
+| **product-service** | `8082` | `product_db` | Product catalog, stock check (internal), ADMIN-only create |
+| **order-service** | `8083` | `order_db` | Order creation with stock verification, state machine |
+| **payment-webhook-service** | `8084` | `payment_db` | HMAC-SHA256 webhook, Redis idempotency, audit trail |
 
 ---
 
-## 📊 Endpoints Specification
+## 🔐 Security Design
 
-| Method | Endpoint | Access | Purpose |
-|---|---|---|---|
-| `POST` | `/api/v1/webhooks/payment` | Public (HMAC protected) | Receives payment callbacks from gateway |
-| `POST` | `/api/v1/orders` | Public / Demo | Creates a new order (`PENDING`) |
-| `GET` | `/api/v1/orders/{orderNumber}/status` | Public / Demo | Checks live order status |
-| `POST` | `/api/v1/orders/{orderNumber}/simulate-webhook` | Public / Demo | Generates valid mock payload & HMAC signature |
-| `GET` | `/swagger-ui/index.html` | Public | Interactive OpenAPI 3 / Swagger documentation |
+### Asymmetric RS256 JWT
+- **auth-service** → holds `private_key.pem`, signs tokens
+- **api-gateway** → holds only `public_key.pem`, validates tokens
+- **Other services** → trust `X-User-Email` & `X-User-Role` headers injected by gateway
+
+### Payment Webhook Security
+| Threat | Solution |
+|--------|----------|
+| Payload spoofing | HMAC-SHA256 signature verification |
+| Timing attacks | Constant-time comparison (`MessageDigest.isEqual`) |
+| Duplicate processing | Redis `SETNX` atomic idempotency lock |
+| Amount tampering | Strict amount integrity check against order DB |
 
 ---
 
-## 🧪 Testing Suite (36 Tests, 100% Green)
+## 📡 API Endpoints
 
-The project is backed by a rigorous test pyramid:
-* **Unit Tests (`HmacSignatureValidatorTest`):** Validates signature calculations, tampered signatures, data alterations, and null-safety.
-* **Domain Tests (`OrderProcessingServiceTest`):** Verifies state machine transitions, guard clauses, and amount tampering detection.
-* **End-to-End Integration Tests (`WebhookIntegrationTest`):** Uses **Testcontainers** to validate real HTTP calls, PostgreSQL persistence, Redis idempotency locking, and HTTP 401 rejections.
-* **Authentication Suite:** Full suite of JWT RS256, Refresh Token rotation, and Redis token blacklist tests.
+All endpoints are accessed via the **API Gateway at `:8080`**.
 
+### Auth (`/api/v1/auth`)
+| Method | Endpoint | Auth | Description |
+|--------|----------|------|-------------|
+| `POST` | `/api/v1/auth/register` | Public | Register new user |
+| `POST` | `/api/v1/auth/login` | Public | Login, get JWT + refresh token |
+| `POST` | `/api/v1/auth/refresh` | Public | Refresh access token |
+| `POST` | `/api/v1/auth/logout` | JWT | Logout, blacklist token |
+
+### Products (`/api/v1/products`)
+| Method | Endpoint | Auth | Description |
+|--------|----------|------|-------------|
+| `GET` | `/api/v1/products` | Public | Browse product catalog (paginated) |
+| `GET` | `/api/v1/products/{id}` | Public | Product detail |
+| `POST` | `/api/v1/products` | JWT + ADMIN | Create new product |
+| `GET` | `/api/v1/products/{sku}/check-stock?quantity=N` | JWT | Check stock availability |
+
+### Orders (`/api/v1/orders`)
+| Method | Endpoint | Auth | Description |
+|--------|----------|------|-------------|
+| `POST` | `/api/v1/orders` | JWT | Create order (auto stock check) |
+| `GET` | `/api/v1/orders/{orderNumber}/status` | JWT | Get order status |
+| `POST` | `/api/v1/orders/{orderNumber}/simulate-webhook` | JWT | Generate test webhook payload |
+
+### Payment Webhook (`/api/v1/webhooks`)
+| Method | Endpoint | Auth | Description |
+|--------|----------|------|-------------|
+| `POST` | `/api/v1/webhooks/payment` | HMAC | Receive payment callback |
+
+---
+
+## 🚀 Quickstart with Docker Compose
+
+### Prerequisites
+- **Docker** & **Docker Compose** v2+
+- **Java 21** (for local development only)
+
+### 1. Clone & Configure
 ```bash
-# Run all 36 unit and integration tests
-./mvnw test
+git clone <repo-url>
+cd java-springboot-marketplace-microservices
+
+# Copy environment config
+cp .env.example .env
+# Edit .env sesuai kebutuhan (minimal ubah DB_PASSWORD)
+```
+
+### 2. Run All Services
+```bash
+docker compose up --build
+```
+
+> ☕ First build ~3-5 minutes (Maven downloads dependencies). Subsequent builds are much faster due to Docker layer caching.
+
+### 3. Verify All Services Running
+```bash
+docker compose ps
+```
+Expected output:
+```
+NAME                          STATUS
+marketplace-api-gateway       Up (healthy)
+marketplace-auth-service      Up (healthy)
+marketplace-product-service   Up (healthy)
+marketplace-order-service     Up (healthy)
+marketplace-payment-service   Up (healthy)
+marketplace-postgres          Up (healthy)
+marketplace-redis             Up (healthy)
 ```
 
 ---
 
-## 🛠️ Quickstart (Local Development)
+## 🧪 End-to-End Simulation Flow
 
-### 1. Prerequisites
-* **Java 21**
-* **Docker & Docker Compose**
-
-### 2. Start PostgreSQL & Redis
+### 1. Register & Login
 ```bash
-docker compose up -d postgres redis
+# Register
+curl -s -X POST http://localhost:8080/api/v1/auth/register \
+  -H "Content-Type: application/json" \
+  -d '{"email": "user@example.com", "password": "Password123!", "fullName": "Test User"}'
+
+# Login — save the token
+TOKEN=$(curl -s -X POST http://localhost:8080/api/v1/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"email": "user@example.com", "password": "Password123!"}' \
+  | jq -r '.accessToken')
 ```
 
-### 3. Run the Spring Boot Application
+### 2. Browse Products (Public)
 ```bash
-./mvnw spring-boot:run
+curl -s http://localhost:8080/api/v1/products | jq
 ```
 
-### 4. Interactive Simulation Flow
+### 3. Create an Order (with automatic stock check)
 ```bash
-# 1. Create a new order (status: PENDING)
 curl -s -X POST http://localhost:8080/api/v1/orders \
   -H "Content-Type: application/json" \
-  -d '{"orderNumber": "ORD-DEMO-001", "amount": 250000.00}'
+  -H "Authorization: Bearer $TOKEN" \
+  -d '{
+    "orderNumber": "ORD-DEMO-001",
+    "productSku": "SKU-LAPTOP-001",
+    "quantity": 2,
+    "amount": 50000000.00
+  }' | jq
+```
 
-# 2. Generate a valid mock webhook payload & HMAC signature
-curl -s -X POST http://localhost:8080/api/v1/orders/ORD-DEMO-001/simulate-webhook
+### 4. Simulate Payment Webhook
+```bash
+# Generate valid HMAC signature + payload
+WEBHOOK=$(curl -s -X POST http://localhost:8080/api/v1/orders/ORD-DEMO-001/simulate-webhook \
+  -H "Authorization: Bearer $TOKEN")
 
-# 3. Send valid webhook (replace <SIGNATURE> and <RAW_PAYLOAD> from step 2)
+SIGNATURE=$(echo $WEBHOOK | jq -r '.valid_signature')
+PAYLOAD=$(echo $WEBHOOK | jq -r '.raw_payload')
+
+# Send webhook to payment service
 curl -i -X POST http://localhost:8080/api/v1/webhooks/payment \
   -H "Content-Type: application/json" \
-  -H "X-Signature: <SIGNATURE>" \
-  -d '<RAW_PAYLOAD>'
-# Result: HTTP 200 OK -> Order status becomes PAID!
+  -H "X-Signature: $SIGNATURE" \
+  -d "$PAYLOAD"
+# Result: HTTP 200 → Order status becomes PAID!
+```
 
-# 4. Test Idempotency (Send the exact same request again)
-# Result: HTTP 200 OK with message: "Duplicate notification ignored"
+### 5. Test Security Scenarios
+```bash
+# Test: Insufficient stock (HTTP 422)
+curl -s -X POST http://localhost:8080/api/v1/orders \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $TOKEN" \
+  -d '{"orderNumber": "ORD-DEMO-002", "productSku": "SKU-LAPTOP-001", "quantity": 9999, "amount": 1.00}'
 
-# 5. Test Hacker Protection (Send request with invalid signature)
+# Test: Invalid HMAC signature (HTTP 401)
 curl -i -X POST http://localhost:8080/api/v1/webhooks/payment \
   -H "Content-Type: application/json" \
   -H "X-Signature: invalid_fake_signature" \
   -d '{"transaction_id":"TRX-FAKE","order_number":"ORD-DEMO-001","gross_amount":250000.00,"transaction_status":"settlement"}'
-# Result: HTTP 401 Unauthorized!
+
+# Test: Duplicate webhook (HTTP 200 idempotent)
+# (Send the same valid webhook twice — second returns "Duplicate notification ignored")
 ```
+
+---
+
+## 🛠️ Local Development (Without Docker)
+
+### Start Infrastructure Only
+```bash
+docker compose up -d postgres redis
+```
+
+### Run Each Service Individually
+```bash
+# In separate terminals:
+cd auth-service    && ../mvnw spring-boot:run
+cd product-service && ../mvnw spring-boot:run
+cd order-service   && ../mvnw spring-boot:run
+cd payment-webhook-service && ../mvnw spring-boot:run
+cd api-gateway     && ../mvnw spring-boot:run
+```
+
+### Run Unit Tests
+```bash
+# All unit tests (excludes @Tag("integration") tests)
+./mvnw test
+
+# Integration tests only (requires running Docker infra)
+./mvnw test -Dgroups=integration
+```
+
+---
+
+## 📁 Project Structure
+
+```
+marketplace-microservices/
+├── pom.xml                          ← Root Multi-Module POM
+├── docker-compose.yml               ← Full microservices orchestration
+├── docker/
+│   └── init-dbs.sh                  ← Creates auth_db, product_db, order_db, payment_db
+│
+├── api-gateway/                     ← Port 8080 — Spring Cloud Gateway
+│   ├── Dockerfile
+│   └── src/main/java/.../gateway/
+│       ├── config/RsaKeyConfig.java
+│       └── filter/JwtAuthenticationFilter.java
+│
+├── auth-service/                    ← Port 8081 — JWT RS256 Auth
+│   ├── Dockerfile
+│   └── src/main/resources/certs/    ← private_key.pem + public_key.pem
+│
+├── product-service/                 ← Port 8082 — Product Catalog
+│   └── Dockerfile
+│
+├── order-service/                   ← Port 8083 — Order + Stock Check
+│   └── Dockerfile
+│
+└── payment-webhook-service/         ← Port 8084 — HMAC + Redis Idempotency
+    └── Dockerfile
+```
+
+---
+
+## 📖 Interactive API Documentation
+
+Each service exposes Swagger UI when running locally:
+
+| Service | Swagger URL |
+|---------|------------|
+| auth-service | http://localhost:8081/swagger-ui.html |
+| product-service | http://localhost:8082/swagger-ui.html |
+| order-service | http://localhost:8083/swagger-ui.html |
+| payment-webhook-service | http://localhost:8084/swagger-ui.html |

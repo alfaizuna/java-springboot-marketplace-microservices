@@ -1,7 +1,9 @@
 **/.git
 **/.gitignore
 **/.gitattributes
+# Ignore all target directories (root & sub-modules)
 target/
+**/target/
 .mvn/wrapper/maven-wrapper.jar
 **/.idea
 **/*.iml
@@ -12,6 +14,5 @@ logs/
 .env
 *.env
 MANUAL_TESTING.md
-Tasks.md
-PRD.md
+planning_marketplace_microservices.md
 postman_collection.json
