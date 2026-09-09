@@ -1,0 +1,112 @@
+# ==============================================================================
+# GitHub Actions CI/CD Pipeline — Marketplace Microservices
+# ==============================================================================
+#
+# Triggers:
+#   - push ke branch: main, develop
+#   - pull request ke branch: main, develop
+#
+# Jobs:
+#   1. build-and-test  — compile + unit test semua modules
+#   2. docker-build    — verifikasi setiap Dockerfile bisa di-build (dry-run)
+#
+# Catatan:
+#   - Integration tests (@Tag("integration")) di-skip karena butuh PostgreSQL/Redis
+#   - Docker push ke registry hanya jika push ke main (opsional, aktifkan manual)
+# ==============================================================================
+
+name: CI — Build & Test
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+env:
+  JAVA_VERSION: '21'
+  JAVA_DISTRIBUTION: 'temurin'
+
+jobs:
+  # ────────────────────────────────────────────────────────────────────────────
+  # Job 1: Compile semua modul + jalankan unit tests
+  # ────────────────────────────────────────────────────────────────────────────
+  build-and-test:
+    name: Build & Unit Tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout source code
+        uses: actions/checkout@v4
+
+      - name: Set up Java ${{ env.JAVA_VERSION }}
+        uses: actions/setup-java@v4
+        with:
+          java-version: ${{ env.JAVA_VERSION }}
+          distribution: ${{ env.JAVA_DISTRIBUTION }}
+          cache: 'maven'  # Cache ~/.m2/repository untuk percepat build berikutnya
+
+      - name: Build & run unit tests (all modules)
+        run: ./mvnw clean package -B --no-transfer-progress
+        # -B: batch mode (no interactive prompts)
+        # --no-transfer-progress: kurangi output download yang panjang
+        # Unit tests jalan; @Tag("integration") di-skip via excludedGroups di pom.xml
+
+      - name: Upload test reports
+        if: always()  # Upload meskipun test gagal, untuk investigasi
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-reports
+          path: '**/target/surefire-reports/*.xml'
+          retention-days: 7
+
+      - name: Upload build artifacts (JARs)
+        uses: actions/upload-artifact@v4
+        with:
+          name: service-jars
+          path: |
+            api-gateway/target/*.jar
+            auth-service/target/*.jar
+            product-service/target/*.jar
+            order-service/target/*.jar
+            payment-webhook-service/target/*.jar
+          retention-days: 1
+
+  # ────────────────────────────────────────────────────────────────────────────
+  # Job 2: Verifikasi setiap Dockerfile bisa di-build
+  # Hanya jalan setelah build-and-test sukses
+  # ────────────────────────────────────────────────────────────────────────────
+  docker-build:
+    name: Docker Build Verification
+    runs-on: ubuntu-latest
+    needs: build-and-test  # Tunggu job 1 selesai
+    strategy:
+      matrix:
+        service:
+          - name: api-gateway
+            dockerfile: api-gateway/Dockerfile
+          - name: auth-service
+            dockerfile: auth-service/Dockerfile
+          - name: product-service
+            dockerfile: product-service/Dockerfile
+          - name: order-service
+            dockerfile: order-service/Dockerfile
+          - name: payment-webhook-service
+            dockerfile: payment-webhook-service/Dockerfile
+
+    steps:
+      - name: Checkout source code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Docker image — ${{ matrix.service.name }}
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ${{ matrix.service.dockerfile }}
+          push: false  # Hanya build, tidak push ke registry
+          tags: marketplace/${{ matrix.service.name }}:ci-${{ github.sha }}
+          cache-from: type=gha,scope=${{ matrix.service.name }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.service.name }}
