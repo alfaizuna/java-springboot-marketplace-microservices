@@ -22,3 +22,12 @@ spring:
 payment:
   webhook:
     secret-key: ${PAYMENT_WEBHOOK_SECRET:super-secret-webhook-key-change-in-prod}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      show-details: never

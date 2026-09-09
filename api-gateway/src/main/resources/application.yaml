@@ -38,3 +38,12 @@ application:
     jwt:
       rsa:
         public-key-location: ${RSA_PUBLIC_KEY_LOCATION:classpath:certs/public_key.pem}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      show-details: never

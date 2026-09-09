@@ -33,7 +33,8 @@ public class SecurityConfiguration {
                                 "/swagger-ui/**",
                                 "/swagger-ui.html",
                                 "/api/v1/webhooks/**",
-                                "/api/v1/orders/**"
+                                "/api/v1/orders/**",
+                                "/actuator/health"
                         ).permitAll()
                         .requestMatchers("/api/v1/demo/admin").hasRole("ADMIN")
                         .anyRequest().authenticated()
