@@ -1,828 +1,14 @@
 {
 	"info": {
-		"_postman_id": "b8a92e10-4c3d-4e5f-a678-9b0c1d2e3f4a",
-		"name": "Java Spring Boot Marketplace Microservices REST API (JWT RS256 + Redis + Flyway)",
-		"description": "Koleksi Postman resmi untuk pengujian lengkap Java Spring Boot Marketplace Microservices REST API (Spring Boot 4).\nDilengkapi dengan fitur auto-save token (Access Token & Refresh Token) ke dalam collection variables setelah request Register, Login, dan Refresh Token.",
+		"_postman_id": "c2a1f3e4-5d6b-7c8e-9f0a-1b2c3d4e5f6a",
+		"name": "Marketplace Microservices API",
+		"description": "Koleksi Postman resmi untuk Marketplace Microservices (Spring Boot 4, Java 21).\n\nFitur:\n- Auto-save accessToken & refreshToken ke Collection Variables setelah Login/Register/Refresh\n- Semua request ber-auth otomatis menggunakan {{accessToken}}\n- Flow lengkap: Auth → Products → Orders → Payment Webhook\n\nBase URL: http://localhost:8080 (via API Gateway)\n\nCollection Variables:\n- baseUrl: http://localhost:8080\n- accessToken: (auto-filled setelah login)\n- refreshToken: (auto-filled setelah login)\n- webhookSignature: (auto-filled setelah simulate-webhook)\n- webhookPayload: (auto-filled setelah simulate-webhook)",
 		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
 	},
-	"item": [
-		{
-			"name": "1. Authentication",
-			"item": [
-				{
-					"name": "Get RSA Public Key",
-					"request": {
-						"method": "GET",
-						"header": [],
-						"url": {
-							"raw": "{{baseUrl}}/api/v1/auth/public-key",
-							"host": [
-								"{{baseUrl}}"
-							],
-							"path": [
-								"api",
-								"v1",
-								"auth",
-								"public-key"
-							]
-						},
-						"description": "Mengambil RSA Public Key (format PEM X.509) untuk verifikasi signature JWT oleh client atau resource server."
-					},
-					"response": []
-				},
-				{
-					"name": "Register User",
-					"event": [
-						{
-							"listen": "test",
-							"script": {
-								"exec": [
-									"if (pm.response.code === 200) {",
-									"    var jsonData = pm.response.json();",
-									"    if (jsonData.token) {",
-									"        pm.collectionVariables.set(\"accessToken\", jsonData.token);",
-									"        console.log(\"Access Token saved:\", jsonData.token);",
-									"    }",
-									"    if (jsonData.refreshToken) {",
-									"        pm.collectionVariables.set(\"refreshToken\", jsonData.refreshToken);",
-									"        console.log(\"Refresh Token saved:\", jsonData.refreshToken);",
-									"    }",
-									"}"
-								],
-								"type": "text/javascript"
-							}
-						}
-					],
-					"request": {
-						"method": "POST",
-						"header": [
-							{
-								"key": "Content-Type",
-								"value": "application/json"
-							}
-						],
-						"body": {
-							"mode": "raw",
-							"raw": "{\n  \"name\": \"{{name}}\",\n  \"email\": \"{{email}}\",\n  \"password\": \"{{password}}\"\n}"
-						},
-						"url": {
-							"raw": "{{baseUrl}}/api/v1/auth/register",
-							"host": [
-								"{{baseUrl}}"
-							],
-							"path": [
-								"api",
-								"v1",
-								"auth",
-								"register"
-							]
-						},
-						"description": "Mendaftarkan user baru dengan role USER secara default. Mengembalikan Access Token (RS256) dan Refresh Token."
-					},
-					"response": []
-				},
-				{
-					"name": "Login User",
-					"event": [
-						{
-							"listen": "test",
-							"script": {
-								"exec": [
-									"if (pm.response.code === 200) {",
-									"    var jsonData = pm.response.json();",
-									"    if (jsonData.token) {",
-									"        pm.collectionVariables.set(\"accessToken\", jsonData.token);",
-									"        console.log(\"New Access Token saved:\", jsonData.token);",
-									"    }",
-									"    if (jsonData.refreshToken) {",
-									"        pm.collectionVariables.set(\"refreshToken\", jsonData.refreshToken);",
-									"        console.log(\"New Refresh Token saved:\", jsonData.refreshToken);",
-									"    }",
-									"}"
-								],
-								"type": "text/javascript"
-							}
-						}
-					],
-					"request": {
-						"method": "POST",
-						"header": [
-							{
-								"key": "Content-Type",
-								"value": "application/json"
-							}
-						],
-						"body": {
-							"mode": "raw",
-							"raw": "{\n  \"email\": \"{{email}}\",\n  \"password\": \"{{password}}\"\n}"
-						},
-						"url": {
-							"raw": "{{baseUrl}}/api/v1/auth/login",
-							"host": [
-								"{{baseUrl}}"
-							],
-							"path": [
-								"api",
-								"v1",
-								"auth",
-								"login"
-							]
-						},
-						"description": "Autentikasi kredensial pengguna dan menghasilkan pasangan token baru."
-					},
-					"response": []
-				},
-				{
-					"name": "Refresh Access Token",
-					"event": [
-						{
-							"listen": "test",
-							"script": {
-								"exec": [
-									"if (pm.response.code === 200) {",
-									"    var jsonData = pm.response.json();",
-									"    if (jsonData.token) {",
-									"        pm.collectionVariables.set(\"accessToken\", jsonData.token);",
-									"        console.log(\"Refreshed Access Token saved:\", jsonData.token);",
-									"    }",
-									"}"
-								],
-								"type": "text/javascript"
-							}
-						}
-					],
-					"request": {
-						"method": "POST",
-						"header": [
-							{
-								"key": "Content-Type",
-								"value": "application/json"
-							}
-						],
-						"body": {
-							"mode": "raw",
-							"raw": "{\n  \"refreshToken\": \"{{refreshToken}}\"\n}"
-						},
-						"url": {
-							"raw": "{{baseUrl}}/api/v1/auth/refresh-token",
-							"host": [
-								"{{baseUrl}}"
-							],
-							"path": [
-								"api",
-								"v1",
-								"auth",
-								"refresh-token"
-							]
-						},
-						"description": "Membuat Access Token (RS256) baru menggunakan Refresh Token yang masih valid."
-					},
-					"response": []
-				},
-				{
-					"name": "Logout User",
-					"request": {
-						"method": "POST",
-						"header": [
-							{
-								"key": "Authorization",
-								"value": "Bearer {{accessToken}}"
-							},
-							{
-								"key": "Content-Type",
-								"value": "application/json"
-							}
-						],
-						"body": {
-							"mode": "raw",
-							"raw": "{\n  \"refreshToken\": \"{{refreshToken}}\"\n}"
-						},
-						"url": {
-							"raw": "{{baseUrl}}/api/v1/auth/logout",
-							"host": [
-								"{{baseUrl}}"
-							],
-							"path": [
-								"api",
-								"v1",
-								"auth",
-								"logout"
-							]
-						},
-						"description": "Memasukkan Access Token ke Redis Blacklist (dengan TTL) dan me-revoke Refresh Token di PostgreSQL."
-					},
-					"response": []
-				}
-			]
-		},
-		{
-			"name": "2. User Management",
-			"item": [
-				{
-					"name": "Get Current User Profile",
-					"request": {
-						"method": "GET",
-						"header": [
-							{
-								"key": "Authorization",
-								"value": "Bearer {{accessToken}}"
-							}
-						],
-						"url": {
-							"raw": "{{baseUrl}}/api/v1/users/me",
-							"host": [
-								"{{baseUrl}}"
-							],
-							"path": [
-								"api",
-								"v1",
-								"users",
-								"me"
-							]
-						},
-						"description": "Mengambil detail profil akun pengguna yang sedang login."
-					},
-					"response": []
-				},
-				{
-					"name": "Update User Profile",
-					"request": {
-						"method": "PUT",
-						"header": [
-							{
-								"key": "Authorization",
-								"value": "Bearer {{accessToken}}"
-							},
-							{
-								"key": "Content-Type",
-								"value": "application/json"
-							}
-						],
-						"body": {
-							"mode": "raw",
-							"raw": "{\n  \"name\": \"{{name}} Updated\"\n}"
-						},
-						"url": {
-							"raw": "{{baseUrl}}/api/v1/users/me",
-							"host": [
-								"{{baseUrl}}"
-							],
-							"path": [
-								"api",
-								"v1",
-								"users",
-								"me"
-							]
-						},
-						"description": "Memperbarui nama profil pengguna yang sedang login."
-					},
-					"response": []
-				},
-				{
-					"name": "Change Password",
-					"request": {
-						"method": "PATCH",
-						"header": [
-							{
-								"key": "Authorization",
-								"value": "Bearer {{accessToken}}"
-							},
-							{
-								"key": "Content-Type",
-								"value": "application/json"
-							}
-						],
-						"body": {
-							"mode": "raw",
-							"raw": "{\n  \"currentPassword\": \"{{password}}\",\n  \"newPassword\": \"{{newPassword}}\",\n  \"confirmationPassword\": \"{{newPassword}}\"\n}"
-						},
-						"url": {
-							"raw": "{{baseUrl}}/api/v1/users/me/password",
-							"host": [
-								"{{baseUrl}}"
-							],
-							"path": [
-								"api",
-								"v1",
-								"users",
-								"me",
-								"password"
-							]
-						},
-						"description": "Mengubah password pengguna saat ini dengan validasi old password."
-					},
-					"response": []
-				},
-				{
-					"name": "Get All Users (Admin Only)",
-					"request": {
-						"method": "GET",
-						"header": [
-							{
-								"key": "Authorization",
-								"value": "Bearer {{accessToken}}"
-							}
-						],
-						"url": {
-							"raw": "{{baseUrl}}/api/v1/users?page=0&size=10",
-							"host": [
-								"{{baseUrl}}"
-							],
-							"path": [
-								"api",
-								"v1",
-								"users"
-							],
-							"query": [
-								{
-									"key": "page",
-									"value": "0"
-								},
-								{
-									"key": "size",
-									"value": "10"
-								}
-							]
-						},
-						"description": "Mengambil seluruh data pengguna terpaginasi (Hanya untuk pengguna dengan role ADMIN)."
-					},
-					"response": []
-				},
-				{
-					"name": "Delete User by ID (Admin Only)",
-					"request": {
-						"method": "DELETE",
-						"header": [
-							{
-								"key": "Authorization",
-								"value": "Bearer {{accessToken}}"
-							}
-						],
-						"url": {
-							"raw": "{{baseUrl}}/api/v1/users/:id",
-							"host": [
-								"{{baseUrl}}"
-							],
-							"path": [
-								"api",
-								"v1",
-								"users",
-								":id"
-							],
-							"variable": [
-								{
-									"key": "id",
-									"value": "2"
-								}
-							]
-						},
-						"description": "Menghapus akun pengguna berdasarkan ID (Hanya untuk ADMIN)."
-					},
-					"response": []
-				}
-			]
-		},
-		{
-			"name": "3. Demo & Role Checks",
-			"item": [
-				{
-					"name": "Demo Authenticated User",
-					"request": {
-						"method": "GET",
-						"header": [
-							{
-								"key": "Authorization",
-								"value": "Bearer {{accessToken}}"
-							}
-						],
-						"url": {
-							"raw": "{{baseUrl}}/api/v1/demo/hello",
-							"host": [
-								"{{baseUrl}}"
-							],
-							"path": [
-								"api",
-								"v1",
-								"demo",
-								"hello"
-							]
-						},
-						"description": "Endpoint demo yang dapat diakses oleh semua user yang telah login."
-					},
-					"response": []
-				},
-				{
-					"name": "Demo Admin Only",
-					"request": {
-						"method": "GET",
-						"header": [
-							{
-								"key": "Authorization",
-								"value": "Bearer {{accessToken}}"
-							}
-						],
-						"url": {
-							"raw": "{{baseUrl}}/api/v1/demo/admin",
-							"host": [
-								"{{baseUrl}}"
-							],
-							"path": [
-								"api",
-								"v1",
-								"demo",
-								"admin"
-							]
-						},
-						"description": "Endpoint demo yang khusus dilindungi oleh Spring Security hasRole('ADMIN')."
-					},
-					"response": []
-				}
-			]
-		},
-		{
-			"name": "4. Security & Negative Tests",
-			"item": [
-				{
-					"name": "Verify Blacklisted Token (Expect 403)",
-					"event": [
-						{
-							"listen": "test",
-							"script": {
-								"exec": [
-									"pm.test(\"Status code is 403 Forbidden\", function () {",
-									"    pm.response.to.have.status(403);",
-									"});"
-								],
-								"type": "text/javascript"
-							}
-						}
-					],
-					"request": {
-						"method": "GET",
-						"header": [
-							{
-								"key": "Authorization",
-								"value": "Bearer {{accessToken}}"
-							}
-						],
-						"url": {
-							"raw": "{{baseUrl}}/api/v1/users/me",
-							"host": [
-								"{{baseUrl}}"
-							],
-							"path": [
-								"api",
-								"v1",
-								"users",
-								"me"
-							]
-						},
-						"description": "Pengujian keamanan: Panggil request ini setelah Logout. Token yang telah di-blacklist di Redis harus ditolak dengan HTTP 403."
-					},
-					"response": []
-				},
-				{
-					"name": "Verify Revoked Refresh Token (Expect 400)",
-					"event": [
-						{
-							"listen": "test",
-							"script": {
-								"exec": [
-									"pm.test(\"Status code is 400 Bad Request\", function () {",
-									"    pm.response.to.have.status(400);",
-									"});"
-								],
-								"type": "text/javascript"
-							}
-						}
-					],
-					"request": {
-						"method": "POST",
-						"header": [
-							{
-								"key": "Content-Type",
-								"value": "application/json"
-							}
-						],
-						"body": {
-							"mode": "raw",
-							"raw": "{\n  \"refreshToken\": \"{{refreshToken}}\"\n}"
-						},
-						"url": {
-							"raw": "{{baseUrl}}/api/v1/auth/refresh-token",
-							"host": [
-								"{{baseUrl}}"
-							],
-							"path": [
-								"api",
-								"v1",
-								"auth",
-								"refresh-token"
-							]
-						},
-						"description": "Pengujian keamanan: Panggil request ini setelah Logout. Refresh token yang revoked harus ditolak dengan HTTP 400."
-					},
-					"response": []
-				},
-				{
-					"name": "Unauthorized Access - No Token (Expect 403)",
-					"event": [
-						{
-							"listen": "test",
-							"script": {
-								"exec": [
-									"pm.test(\"Status code is 403 Forbidden\", function () {",
-									"    pm.response.to.have.status(403);",
-									"});"
-								],
-								"type": "text/javascript"
-							}
-						}
-					],
-					"request": {
-						"method": "GET",
-						"header": [],
-						"url": {
-							"raw": "{{baseUrl}}/api/v1/users/me",
-							"host": [
-								"{{baseUrl}}"
-							],
-							"path": [
-								"api",
-								"v1",
-								"users",
-								"me"
-							]
-						},
-						"description": "Memastikan akses ke endpoint protected tanpa Authorization header selalu ditolak."
-					},
-					"response": []
-				}
-			]
-		},
-		{
-			"name": "5. API Documentation",
-			"item": [
-				{
-					"name": "Get OpenAPI 3 JSON Spec",
-					"request": {
-						"method": "GET",
-						"header": [],
-						"url": {
-							"raw": "{{baseUrl}}/v3/api-docs",
-							"host": [
-								"{{baseUrl}}"
-							],
-							"path": [
-								"v3",
-								"api-docs"
-							]
-						},
-						"description": "Mengambil spesifikasi lengkap OpenAPI versi 3 dalam format JSON."
-					},
-					"response": []
-				},
-				{
-					"name": "Get Swagger UI Portal",
-					"request": {
-						"method": "GET",
-						"header": [],
-						"url": {
-							"raw": "{{baseUrl}}/swagger-ui/index.html",
-							"host": [
-								"{{baseUrl}}"
-							],
-							"path": [
-								"swagger-ui",
-								"index.html"
-							]
-						},
-						"description": "Mengakses halaman web portal antarmuka Swagger UI."
-					},
-					"response": []
-				}
-			]
-		},
-		{
-			"name": "3. Payment Webhook & Orders",
-			"item": [
-				{
-					"name": "Create Order",
-					"request": {
-						"method": "POST",
-						"header": [
-							{
-								"key": "Content-Type",
-								"value": "application/json"
-							}
-						],
-						"body": {
-							"mode": "raw",
-							"raw": "{\n    \"orderNumber\": \"ORD-POSTMAN-001\",\n    \"amount\": 150000.00\n}"
-						},
-						"url": {
-							"raw": "{{baseUrl}}/api/v1/orders",
-							"host": [
-								"{{baseUrl}}"
-							],
-							"path": [
-								"api",
-								"v1",
-								"orders"
-							]
-						},
-						"description": "Membuat pesanan baru dengan status awal PENDING."
-					},
-					"response": []
-				},
-				{
-					"name": "Get Order Status",
-					"request": {
-						"method": "GET",
-						"header": [],
-						"url": {
-							"raw": "{{baseUrl}}/api/v1/orders/ORD-POSTMAN-001/status",
-							"host": [
-								"{{baseUrl}}"
-							],
-							"path": [
-								"api",
-								"v1",
-								"orders",
-								"ORD-POSTMAN-001",
-								"status"
-							]
-						},
-						"description": "Mengecek status terkini dari pesanan."
-					},
-					"response": []
-				},
-				{
-					"name": "Simulate Webhook (Get Payload & Signature)",
-					"event": [
-						{
-							"listen": "test",
-							"script": {
-								"exec": [
-									"if (pm.response.code === 200) {",
-									"    var data = pm.response.json();",
-									"    pm.collectionVariables.set(\"webhookSignature\", data.valid_signature);",
-									"    pm.collectionVariables.set(\"webhookPayload\", data.raw_payload);",
-									"}"
-								],
-								"type": "text/javascript"
-							}
-						}
-					],
-					"request": {
-						"method": "POST",
-						"header": [],
-						"url": {
-							"raw": "{{baseUrl}}/api/v1/orders/ORD-POSTMAN-001/simulate-webhook",
-							"host": [
-								"{{baseUrl}}"
-							],
-							"path": [
-								"api",
-								"v1",
-								"orders",
-								"ORD-POSTMAN-001",
-								"simulate-webhook"
-							]
-						},
-						"description": "Simulator: Menghasilkan mock payload dan HMAC signature valid yang otomatis disimpan ke collection variables."
-					},
-					"response": []
-				},
-				{
-					"name": "Send Valid Payment Webhook",
-					"request": {
-						"method": "POST",
-						"header": [
-							{
-								"key": "Content-Type",
-								"value": "application/json"
-							},
-							{
-								"key": "X-Signature",
-								"value": "{{webhookSignature}}"
-							}
-						],
-						"body": {
-							"mode": "raw",
-							"raw": "{{webhookPayload}}"
-						},
-						"url": {
-							"raw": "{{baseUrl}}/api/v1/webhooks/payment",
-							"host": [
-								"{{baseUrl}}"
-							],
-							"path": [
-								"api",
-								"v1",
-								"webhooks",
-								"payment"
-							]
-						},
-						"description": "Mengirim callback webhook sah dengan signature HMAC valid. Status order berubah jadi PAID."
-					},
-					"response": []
-				},
-				{
-					"name": "Send Duplicate Webhook (Test Idempotency)",
-					"request": {
-						"method": "POST",
-						"header": [
-							{
-								"key": "Content-Type",
-								"value": "application/json"
-							},
-							{
-								"key": "X-Signature",
-								"value": "{{webhookSignature}}"
-							}
-						],
-						"body": {
-							"mode": "raw",
-							"raw": "{{webhookPayload}}"
-						},
-						"url": {
-							"raw": "{{baseUrl}}/api/v1/webhooks/payment",
-							"host": [
-								"{{baseUrl}}"
-							],
-							"path": [
-								"api",
-								"v1",
-								"webhooks",
-								"payment"
-							]
-						},
-						"description": "Mengirim ulang webhook yang sama untuk memverifikasi proteksi Redis Idempotency ('Duplicate notification ignored')."
-					},
-					"response": []
-				},
-				{
-					"name": "Send Spoofed Webhook (Test 401 Unauthorized)",
-					"request": {
-						"method": "POST",
-						"header": [
-							{
-								"key": "Content-Type",
-								"value": "application/json"
-							},
-							{
-								"key": "X-Signature",
-								"value": "fake_spoofed_signature_12345"
-							}
-						],
-						"body": {
-							"mode": "raw",
-							"raw": "{\n    \"transaction_id\": \"TRX-HACKER\",\n    \"order_number\": \"ORD-POSTMAN-001\",\n    \"gross_amount\": 150000.00,\n    \"payment_type\": \"qris\",\n    \"transaction_status\": \"settlement\"\n}"
-						},
-						"url": {
-							"raw": "{{baseUrl}}/api/v1/webhooks/payment",
-							"host": [
-								"{{baseUrl}}"
-							],
-							"path": [
-								"api",
-								"v1",
-								"webhooks",
-								"payment"
-							]
-						},
-						"description": "Simulasi serangan hacker dengan signature palsu. Menghasilkan HTTP 401 Unauthorized."
-					},
-					"response": []
-				}
-			]
-		}
-	],
 	"variable": [
 		{
 			"key": "baseUrl",
 			"value": "http://localhost:8080",
-			"type": "string"
-		},
-		{
-			"key": "name",
-			"value": "Tester Postman",
-			"type": "string"
-		},
-		{
-			"key": "email",
-			"value": "postman_user@example.com",
-			"type": "string"
-		},
-		{
-			"key": "password",
-			"value": "Password123!",
-			"type": "string"
-		},
-		{
-			"key": "newPassword",
-			"value": "NewPassword456!",
 			"type": "string"
 		},
 		{
@@ -844,6 +30,579 @@
 			"key": "webhookPayload",
 			"value": "",
 			"type": "string"
+		},
+		{
+			"key": "lastOrderNumber",
+			"value": "ORD-DEMO-001",
+			"type": "string"
+		}
+	],
+	"item": [
+		{
+			"name": "1. Authentication",
+			"item": [
+				{
+					"name": "Register User",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 200 || pm.response.code === 201) {",
+									"    var jsonData = pm.response.json();",
+									"    if (jsonData.accessToken) {",
+									"        pm.collectionVariables.set('accessToken', jsonData.accessToken);",
+									"        console.log('Access Token saved:', jsonData.accessToken.substring(0, 30) + '...');",
+									"    }",
+									"    if (jsonData.refreshToken) {",
+									"        pm.collectionVariables.set('refreshToken', jsonData.refreshToken);",
+									"        console.log('Refresh Token saved.');",
+									"    }",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{"key": "Content-Type", "value": "application/json"}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"fullName\": \"Demo User\",\n  \"email\": \"demo@marketplace.com\",\n  \"password\": \"Password123!\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/auth/register",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "v1", "auth", "register"]
+						},
+						"description": "Daftarkan user baru. Mengembalikan accessToken (RS256 JWT) dan refreshToken.\nAuto-save token ke collection variables."
+					},
+					"response": []
+				},
+				{
+					"name": "Login",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 200) {",
+									"    var jsonData = pm.response.json();",
+									"    if (jsonData.accessToken) {",
+									"        pm.collectionVariables.set('accessToken', jsonData.accessToken);",
+									"        console.log('Access Token saved:', jsonData.accessToken.substring(0, 30) + '...');",
+									"    }",
+									"    if (jsonData.refreshToken) {",
+									"        pm.collectionVariables.set('refreshToken', jsonData.refreshToken);",
+									"        console.log('Refresh Token saved.');",
+									"    }",
+									"    pm.test('Login successful', function() {",
+									"        pm.response.to.have.status(200);",
+									"        pm.expect(jsonData.accessToken).to.be.a('string');",
+									"    });",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{"key": "Content-Type", "value": "application/json"}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"email\": \"demo@marketplace.com\",\n  \"password\": \"Password123!\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/auth/login",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "v1", "auth", "login"]
+						},
+						"description": "Login dengan email dan password. Auto-save accessToken dan refreshToken ke collection variables."
+					},
+					"response": []
+				},
+				{
+					"name": "Refresh Token",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 200) {",
+									"    var jsonData = pm.response.json();",
+									"    if (jsonData.accessToken) {",
+									"        pm.collectionVariables.set('accessToken', jsonData.accessToken);",
+									"        console.log('New Access Token saved.');",
+									"    }",
+									"    if (jsonData.refreshToken) {",
+									"        pm.collectionVariables.set('refreshToken', jsonData.refreshToken);",
+									"        console.log('New Refresh Token saved (rotated).');",
+									"    }",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{"key": "Content-Type", "value": "application/json"}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"refreshToken\": \"{{refreshToken}}\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/auth/refresh",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "v1", "auth", "refresh"]
+						},
+						"description": "Perbarui access token menggunakan refresh token. Refresh token di-rotate setiap kali digunakan."
+					},
+					"response": []
+				},
+				{
+					"name": "Logout",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [{"key": "token", "value": "{{accessToken}}", "type": "string"}]
+						},
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/auth/logout",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "v1", "auth", "logout"]
+						},
+						"description": "Logout dan blacklist access token saat ini ke Redis."
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "2. Products",
+			"item": [
+				{
+					"name": "Browse Products (Public)",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/products?page=0&size=10",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "v1", "products"],
+							"query": [
+								{"key": "page", "value": "0"},
+								{"key": "size", "value": "10"}
+							]
+						},
+						"description": "Lihat katalog produk. Endpoint publik — tidak perlu JWT.\nMendukung paginasi: ?page=0&size=10"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Product Detail (Public)",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/products/1",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "v1", "products", "1"]
+						},
+						"description": "Lihat detail produk berdasarkan ID. Endpoint publik."
+					},
+					"response": []
+				},
+				{
+					"name": "Check Stock",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [{"key": "token", "value": "{{accessToken}}", "type": "string"}]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/products/SKU-LAPTOP-001/check-stock?quantity=2",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "v1", "products", "SKU-LAPTOP-001", "check-stock"],
+							"query": [
+								{"key": "quantity", "value": "2"}
+							]
+						},
+						"description": "Cek ketersediaan stok untuk SKU tertentu. Membutuhkan JWT."
+					},
+					"response": []
+				},
+				{
+					"name": "Create Product (ADMIN only)",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [{"key": "token", "value": "{{accessToken}}", "type": "string"}]
+						},
+						"method": "POST",
+						"header": [
+							{"key": "Content-Type", "value": "application/json"}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"sku\": \"SKU-NEW-001\",\n  \"name\": \"Produk Baru\",\n  \"description\": \"Deskripsi produk baru\",\n  \"price\": 999000.00,\n  \"stock\": 100\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/products",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "v1", "products"]
+						},
+						"description": "Tambah produk baru. Hanya bisa diakses oleh user dengan role ADMIN.\nJika role bukan ADMIN, akan mengembalikan HTTP 403 Forbidden."
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "3. Orders",
+			"item": [
+				{
+					"name": "Create Order (with Stock Check)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 201) {",
+									"    var jsonData = pm.response.json();",
+									"    if (jsonData.orderNumber) {",
+									"        pm.collectionVariables.set('lastOrderNumber', jsonData.orderNumber);",
+									"        console.log('Order Number saved:', jsonData.orderNumber);",
+									"    }",
+									"    pm.test('Order created with PENDING status', function() {",
+									"        pm.expect(jsonData.status).to.eql('PENDING');",
+									"    });",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [{"key": "token", "value": "{{accessToken}}", "type": "string"}]
+						},
+						"method": "POST",
+						"header": [
+							{"key": "Content-Type", "value": "application/json"}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"orderNumber\": \"ORD-DEMO-001\",\n  \"productSku\": \"SKU-LAPTOP-001\",\n  \"quantity\": 2,\n  \"amount\": 50000000.00\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/orders",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "v1", "orders"]
+						},
+						"description": "Buat order baru. order-service otomatis memanggil product-service untuk verifikasi stok sebelum menyimpan order.\n\nSkenario error:\n- SKU tidak ditemukan → HTTP 404\n- Stok tidak mencukupi → HTTP 422 Unprocessable Entity\n- product-service mati → HTTP 503 Service Unavailable"
+					},
+					"response": []
+				},
+				{
+					"name": "Create Order - Stok Tidak Cukup (422)",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [{"key": "token", "value": "{{accessToken}}", "type": "string"}]
+						},
+						"method": "POST",
+						"header": [
+							{"key": "Content-Type", "value": "application/json"}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"orderNumber\": \"ORD-FAIL-001\",\n  \"productSku\": \"SKU-LAPTOP-001\",\n  \"quantity\": 99999,\n  \"amount\": 1.00\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/orders",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "v1", "orders"]
+						},
+						"description": "Test skenario stok tidak cukup. Harusnya mengembalikan HTTP 422 Unprocessable Entity dengan pesan insufficient stock."
+					},
+					"response": []
+				},
+				{
+					"name": "Get Order Status",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [{"key": "token", "value": "{{accessToken}}", "type": "string"}]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/orders/{{lastOrderNumber}}/status",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "v1", "orders", "{{lastOrderNumber}}", "status"]
+						},
+						"description": "Cek status order terkini. Menggunakan {{lastOrderNumber}} yang di-save setelah Create Order."
+					},
+					"response": []
+				},
+				{
+					"name": "Simulate Webhook (Generate Signature)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 200) {",
+									"    var jsonData = pm.response.json();",
+									"    if (jsonData.valid_signature) {",
+									"        pm.collectionVariables.set('webhookSignature', jsonData.valid_signature);",
+									"        console.log('Webhook Signature saved.');",
+									"    }",
+									"    if (jsonData.raw_payload) {",
+									"        pm.collectionVariables.set('webhookPayload', jsonData.raw_payload);",
+									"        console.log('Webhook Payload saved.');",
+									"    }",
+									"    pm.test('Signature generated', function() {",
+									"        pm.expect(jsonData.valid_signature).to.be.a('string');",
+									"    });",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [{"key": "token", "value": "{{accessToken}}", "type": "string"}]
+						},
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/orders/{{lastOrderNumber}}/simulate-webhook",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "v1", "orders", "{{lastOrderNumber}}", "simulate-webhook"]
+						},
+						"description": "Generate payload mock + HMAC signature yang valid untuk testing webhook.\nAuto-save signature ke {{webhookSignature}} dan payload ke {{webhookPayload}}.\n\nJalankan request ini SEBELUM 'Send Valid Payment Webhook'."
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "4. Payment Webhook",
+			"item": [
+				{
+					"name": "Send Valid Payment Webhook",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test('Webhook processed successfully', function() {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"if (pm.response.code === 200) {",
+									"    console.log('Webhook accepted! Order status should now be PAID.');",
+									"    console.log('Run Get Order Status to verify.');",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{"key": "Content-Type", "value": "application/json"},
+							{"key": "X-Signature", "value": "{{webhookSignature}}"}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{{webhookPayload}}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/webhooks/payment",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "v1", "webhooks", "payment"]
+						},
+						"description": "Kirim webhook pembayaran dengan signature HMAC yang valid.\nGunakan {{webhookSignature}} dan {{webhookPayload}} yang di-generate dari 'Simulate Webhook'.\n\nHasil: HTTP 200 → Order berubah status menjadi PAID"
+					},
+					"response": []
+				},
+				{
+					"name": "Send Duplicate Webhook (Idempotency Test)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test('Duplicate webhook gracefully ignored (200)', function() {",
+									"    pm.response.to.have.status(200);",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData.message).to.include('Duplicate');",
+									"});",
+									"console.log('Idempotency works! Duplicate request ignored without double processing.');"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{"key": "Content-Type", "value": "application/json"},
+							{"key": "X-Signature", "value": "{{webhookSignature}}"}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{{webhookPayload}}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/webhooks/payment",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "v1", "webhooks", "payment"]
+						},
+						"description": "Kirim webhook yang sama dua kali untuk menguji Redis idempotency.\nHasil: HTTP 200 dengan pesan 'Duplicate notification ignored' (tidak memproses ulang)"
+					},
+					"response": []
+				},
+				{
+					"name": "Send Webhook - Invalid Signature (401)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test('Invalid signature rejected with 401', function() {",
+									"    pm.response.to.have.status(401);",
+									"});",
+									"console.log('Security works! Invalid HMAC signature rejected.');"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{"key": "Content-Type", "value": "application/json"},
+							{"key": "X-Signature", "value": "ini_adalah_signature_palsu_dari_hacker"}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"transaction_id\": \"TRX-HACKER-001\",\n  \"order_number\": \"ORD-DEMO-001\",\n  \"gross_amount\": 1.00,\n  \"payment_type\": \"qris\",\n  \"transaction_status\": \"settlement\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/webhooks/payment",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "v1", "webhooks", "payment"]
+						},
+						"description": "Uji keamanan HMAC. Kirim payload dengan signature palsu.\nHasil: HTTP 401 Unauthorized — signature tidak valid ditolak seketika."
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "5. Health Checks",
+			"item": [
+				{
+					"name": "Gateway Health",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "http://localhost:8080/actuator/health",
+							"raw": "http://localhost:8080/actuator/health",
+							"protocol": "http",
+							"host": ["localhost"],
+							"port": "8080",
+							"path": ["actuator", "health"]
+						},
+						"description": "Cek health status API Gateway (port 8080)"
+					},
+					"response": []
+				},
+				{
+					"name": "Auth Service Health",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "http://localhost:8081/actuator/health",
+							"protocol": "http",
+							"host": ["localhost"],
+							"port": "8081",
+							"path": ["actuator", "health"]
+						},
+						"description": "Cek health status auth-service (port 8081)"
+					},
+					"response": []
+				},
+				{
+					"name": "Product Service Health",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "http://localhost:8082/actuator/health",
+							"protocol": "http",
+							"host": ["localhost"],
+							"port": "8082",
+							"path": ["actuator", "health"]
+						},
+						"description": "Cek health status product-service (port 8082)"
+					},
+					"response": []
+				},
+				{
+					"name": "Order Service Health",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "http://localhost:8083/actuator/health",
+							"protocol": "http",
+							"host": ["localhost"],
+							"port": "8083",
+							"path": ["actuator", "health"]
+						},
+						"description": "Cek health status order-service (port 8083)"
+					},
+					"response": []
+				},
+				{
+					"name": "Payment Webhook Service Health",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "http://localhost:8084/actuator/health",
+							"protocol": "http",
+							"host": ["localhost"],
+							"port": "8084",
+							"path": ["actuator", "health"]
+						},
+						"description": "Cek health status payment-webhook-service (port 8084)"
+					},
+					"response": []
+				}
+			]
 		}
 	]
 }

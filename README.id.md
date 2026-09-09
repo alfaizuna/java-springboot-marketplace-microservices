@@ -1,116 +1,283 @@
-# 🛡️ Secure Payment Webhook Handler & Transaction State Machine
-## Solusi Proteksi Webhook Pembayaran & Pencegahan Fraud Transaksi
+# 🛒 Java Spring Boot Marketplace Microservices
 
 [![Java](https://img.shields.io/badge/Java-21-orange.svg)](https://openjdk.org/)
 [![Spring Boot](https://img.shields.io/badge/Spring%20Boot-4.1.1-brightgreen.svg)](https://spring.io/projects/spring-boot)
-[![Spring Security](https://img.shields.io/badge/Spring%20Security-7.x-green.svg)](https://spring.io/projects/spring-security)
-[![Redis](https://img.shields.io/badge/Redis-7.x-red.svg)](https://redis.io/)
+[![Spring Cloud](https://img.shields.io/badge/Spring%20Cloud-2025.1.3-blue.svg)](https://spring.io/projects/spring-cloud)
+[![Spring Cloud Gateway](https://img.shields.io/badge/Gateway-WebFlux-blueviolet.svg)](https://spring.io/projects/spring-cloud-gateway)
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-blue.svg)](https://www.postgresql.org/)
-[![Testcontainers](https://img.shields.io/badge/Testcontainers-Integration%20Tests-black.svg)](https://testcontainers.com/)
+[![Redis](https://img.shields.io/badge/Redis-7.x-red.svg)](https://redis.io/)
+[![Docker](https://img.shields.io/badge/Docker-Compose-2496ED.svg)](https://docs.docker.com/compose/)
 [![Flyway](https://img.shields.io/badge/Flyway-Migrations-blueviolet.svg)](https://flywaydb.org/)
 
-Sistem backend *production-ready* berbasis **Java 21 & Spring Boot 4** yang dirancang untuk menangani tantangan keamanan dan arsitektur nyata pada integrasi Payment Gateway (seperti Midtrans, Xendit, DOKU, atau Stripe): **pemalsuan request (spoofing)**, **serangan timing attack**, **pemrosesan ganda akibat network retry (double fulfillment)**, dan **pemalsuan nominal transfer (amount tampering fraud)**.
+Sistem backend **Marketplace Microservices** *production-ready* berbasis Java 21 dan Spring Boot 4. Mendemonstrasikan dekomposisi layanan yang bersih, autentikasi JWT RS256 asimetris, keamanan webhook pembayaran HMAC, dan komunikasi antar-layanan — semuanya diorkestrasikan melalui Docker Compose.
 
-> 🇬🇧 *For the English documentation and global technical highlights, please refer to [README.md](README.md).*
-
----
-
-## 📖 Narasi Masalah, Solusi, dan Hasil (Case Study)
-
-### 1. Masalah di Dunia Nyata
-Dalam arsitektur e-commerce dan marketplace modern, konfirmasi pembayaran seperti **Virtual Account, QRIS, dan Gerai Ritel** berjalan secara asinkron. Begitu pembeli menyelesaikan transaksi di aplikasi perbankan, server Payment Gateway mengirimkan notifikasi HTTP POST (Webhook) ke backend aplikasi kita.
-
-Namun karena endpoint webhook ini terbuka ke publik, muncul beberapa celah keamanan dan teknis serius:
-1. **Pemalsuan Payload (Payload Spoofing):** Pihak tak bertanggung jawab bisa mengirim JSON palsu dengan status `settlement` / `PAID` untuk mendapatkan barang tanpa pernah membayar.
-2. **Timing Attack:** Perbandingan signature string biasa (`String.equals()`) membocorkan selisih waktu eksekusi nanodetik yang bisa dipakai penyerang untuk menebak signature yang sah.
-3. **Pemrosesan Ganda (Double-Processing):** Gateway menggunakan mekanisme *At-Least-Once Delivery*. Gangguan jaringan sesaat membuat gateway mengirim ulang (retry) notifikasi 2x hingga 5x. Tanpa kontrol idempoten, saldo atau barang pembeli bisa dikirim berulang kali.
-4. **Pemalsuan Nominal (Amount Tampering):** Penyerang memanipulasi nominal sehingga hanya membayar Rp1.000 untuk tagihan sebesar Rp10.000.000.
-5. **Status Mundur (Regressive State):** Notifikasi `EXPIRED` yang datang terlambat akibat lag jaringan bisa membatalkan pesanan yang sebelumnya sudah `PAID`.
+> 🇬🇧 *English documentation: [README.md](README.md)*
 
 ---
 
-### 2. Solusi Arsitektur
-Aplikasi ini menerapkan 5 lapis perlindungan:
-* 🔐 **Verifikasi Kriptografi HMAC-SHA256:** Memvalidasi integritas data mentah menggunakan secret key rahasia bersama. Perbandingan signature menggunakan `MessageDigest.isEqual(...)` agar tahan terhadap *Timing Attack*.
-* ⚡ **Idempotency Engine Atomic dengan Redis:** Menggunakan perintah atomic `SETNX` (Set if Not Exists) dengan TTL 24 jam. Request kedua dan seterusnya yang memiliki `transaction_id` sama otomatis diabaikan tanpa memutasi database.
-* 🚦 **Finite State Machine & Fraud Guard:** Menjamin transisi status pesanan (`PENDING ➔ PAID`). Order yang sudah lunas tidak dapat mundur statusnya. Nominal pembayaran selalu dicocokkan secara presisi dengan tagihan database.
-* 📜 **Audit Trail Lengkap:** Seluruh payload JSON mentah disimpan di tabel `payment_transaction_logs` untuk kebutuhan rekonsiliasi finansial dan investigasi komplain.
-* 🧪 **Integration Test dengan Testcontainers:** Menguji keseluruhan alur secara otomatis menggunakan PostgreSQL 16 dan Redis 7 asli di dalam kontainer Docker sementara (*ephemeral*).
-
----
-
-### 3. Hasil Pengujian
-* **36 Test Cases Lulus 100% (Green Build):** Meliputi Unit Test logika kriptografi, State Machine domain test, dan Testcontainers End-to-End.
-* **Zero Double Fulfillment:** Replay notifikasi otomatis dari gateway berhasil dicegat dalam hitungan milidetik.
-* **Zero Fraud Risk:** Payload yang diubah bahkan 1 karakter atau nominal yang tidak cocok otomatis ditolak seketika (HTTP 401 / Status FAILED).
-
----
-
-## 🏗️ Alur Eksekusi Webhook
+## 🏗️ Arsitektur Sistem
 
 ```
-Payment Gateway (Midtrans / Stripe)
-       │  POST /api/v1/webhooks/payment (Header: X-Signature)
-       ▼
-[ Spring Security Whitelist ]
-       │
-       ▼
-[ Verifikasi HMAC-SHA256 ] ──(Invalid)──▶ 401 Unauthorized
-       │ Valid
-       ▼
-[ Redis Idempotency Lock ] ──(Duplikat)──▶ 200 OK (Abaikan Proses)
-       │ Unik / Baru
-       ▼
-[ Order State Machine ]
-  ├── Cek nominal (Mencegah Fraud)
-  ├── Update status (PENDING ➔ PAID)
-  └── Catat Audit Log ke PostgreSQL
-       │
-       ▼
- 200 OK (Selesai)
+                        ┌─────────────────────────────────┐
+                        │        Client / Postman          │
+                        └─────────────┬───────────────────┘
+                                      │ HTTP :8080
+                                      ▼
+                        ┌─────────────────────────────────┐
+                        │         API Gateway (8080)       │
+                        │   Spring Cloud Gateway WebFlux   │
+                        │   • Validasi RS256 JWT           │
+                        │   • Routing ke semua services    │
+                        │   • Injeksi X-User-Email/Role    │
+                        └──┬──────┬──────┬──────┬─────────┘
+                           │      │      │      │
+              /auth,/users │      │/products    │/webhooks
+                           │      │      │      │
+              ┌────────────▼─┐  ┌─▼──────────┐  ┌▼───────────────────┐
+              │ auth-service │  │product-svc │  │payment-webhook-svc │
+              │    :8081     │  │   :8082    │  │       :8084        │
+              │  auth_db     │  │ product_db │  │    payment_db      │
+              │  Redis       │  └────────────┘  │    Redis           │
+              └──────────────┘        ▲         └────────────────────┘
+                                      │ cek stok
+                                /orders│
+                        ┌─────────────▼──────┐
+                        │   order-service    │
+                        │       :8083        │
+                        │     order_db       │
+                        └────────────────────┘
 ```
 
 ---
 
-## 📊 Daftar Endpoint Utama
+## 🧩 Daftar Services
 
-| Method | Endpoint | Keterangan |
-|---|---|---|
-| `POST` | `/api/v1/webhooks/payment` | Menerima notifikasi callback dari payment provider (HMAC Protected) |
-| `POST` | `/api/v1/orders` | Membuat pesanan baru (`PENDING`) |
-| `GET` | `/api/v1/orders/{orderNumber}/status` | Mengecek status pesanan terkini |
-| `POST` | `/api/v1/orders/{orderNumber}/simulate-webhook` | Menghasilkan mock payload & signature valid untuk pengujian Postman |
-| `GET` | `/swagger-ui/index.html` | Dokumentasi Swagger / OpenAPI 3 interaktif |
+| Service | Port | Database | Fungsi |
+|---------|------|----------|--------|
+| **api-gateway** | `8080` | — | Single entry point, validasi JWT RS256, routing |
+| **auth-service** | `8081` | `auth_db` | Register, Login, Refresh Token, Logout, RS256 JWT |
+| **product-service** | `8082` | `product_db` | Katalog produk, cek stok (internal), buat produk (ADMIN) |
+| **order-service** | `8083` | `order_db` | Buat order dengan verifikasi stok, state machine |
+| **payment-webhook-service** | `8084` | `payment_db` | Webhook HMAC-SHA256, idempotency Redis, audit trail |
 
 ---
 
-## 🛠️ Panduan Menjalankan di Lokal
+## 🔐 Desain Keamanan
 
-### 1. Prasyarat
-* Java 21
-* Docker Desktop
+### JWT Asimetris RS256
+- **auth-service** → menyimpan `private_key.pem`, menandatangani token
+- **api-gateway** → hanya menyimpan `public_key.pem`, memvalidasi token
+- **Service lain** → mempercayai header `X-User-Email` & `X-User-Role` yang diinjeksi gateway
 
-### 2. Jalankan PostgreSQL & Redis
+### Keamanan Webhook Pembayaran
+| Ancaman | Solusi |
+|---------|--------|
+| Pemalsuan payload | Verifikasi signature HMAC-SHA256 |
+| Timing attack | Perbandingan waktu konstan (`MessageDigest.isEqual`) |
+| Pemrosesan ganda | Kunci idempotency Redis atomic (`SETNX`) |
+| Pemalsuan nominal | Validasi jumlah transaksi ke database order |
+
+---
+
+## 📡 Daftar Endpoint API
+
+Semua endpoint diakses melalui **API Gateway di `:8080`**.
+
+### Auth (`/api/v1/auth`)
+| Method | Endpoint | Auth | Keterangan |
+|--------|----------|------|------------|
+| `POST` | `/api/v1/auth/register` | Public | Daftar user baru |
+| `POST` | `/api/v1/auth/login` | Public | Login, dapatkan JWT + refresh token |
+| `POST` | `/api/v1/auth/refresh` | Public | Perbarui access token |
+| `POST` | `/api/v1/auth/logout` | JWT | Logout, blacklist token |
+
+### Produk (`/api/v1/products`)
+| Method | Endpoint | Auth | Keterangan |
+|--------|----------|------|------------|
+| `GET` | `/api/v1/products` | Public | Lihat katalog produk (paginasi) |
+| `GET` | `/api/v1/products/{id}` | Public | Detail produk |
+| `POST` | `/api/v1/products` | JWT + ADMIN | Tambah produk baru |
+| `GET` | `/api/v1/products/{sku}/check-stock?quantity=N` | JWT | Cek ketersediaan stok |
+
+### Order (`/api/v1/orders`)
+| Method | Endpoint | Auth | Keterangan |
+|--------|----------|------|------------|
+| `POST` | `/api/v1/orders` | JWT | Buat order (cek stok otomatis) |
+| `GET` | `/api/v1/orders/{orderNumber}/status` | JWT | Cek status order |
+| `POST` | `/api/v1/orders/{orderNumber}/simulate-webhook` | JWT | Generate payload webhook untuk tes |
+
+### Payment Webhook (`/api/v1/webhooks`)
+| Method | Endpoint | Auth | Keterangan |
+|--------|----------|------|------------|
+| `POST` | `/api/v1/webhooks/payment` | HMAC | Terima callback pembayaran |
+
+---
+
+## 🚀 Cara Menjalankan dengan Docker Compose
+
+### Prasyarat
+- **Docker** & **Docker Compose** v2+
+- **Java 21** (hanya untuk development lokal)
+
+### 1. Clone & Konfigurasi
+```bash
+git clone <repo-url>
+cd java-springboot-marketplace-microservices
+
+# Salin file konfigurasi environment
+cp .env.example .env
+# Edit .env sesuai kebutuhan (minimal ganti DB_PASSWORD)
+```
+
+### 2. Jalankan Semua Services
+```bash
+docker compose up --build
+```
+
+> ☕ Build pertama ~3-5 menit (Maven mengunduh dependensi). Build berikutnya jauh lebih cepat berkat Docker layer caching.
+
+### 3. Verifikasi Semua Services Berjalan
+```bash
+docker compose ps
+```
+Output yang diharapkan:
+```
+NAME                          STATUS
+marketplace-api-gateway       Up (healthy)
+marketplace-auth-service      Up (healthy)
+marketplace-product-service   Up (healthy)
+marketplace-order-service     Up (healthy)
+marketplace-payment-service   Up (healthy)
+marketplace-postgres          Up (healthy)
+marketplace-redis             Up (healthy)
+```
+
+---
+
+## 🧪 Alur Simulasi End-to-End
+
+### 1. Register & Login
+```bash
+# Register
+curl -s -X POST http://localhost:8080/api/v1/auth/register \
+  -H "Content-Type: application/json" \
+  -d '{"email": "user@example.com", "password": "Password123!", "fullName": "Test User"}'
+
+# Login — simpan token
+TOKEN=$(curl -s -X POST http://localhost:8080/api/v1/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"email": "user@example.com", "password": "Password123!"}' \
+  | jq -r '.accessToken')
+```
+
+### 2. Lihat Produk (Publik)
+```bash
+curl -s http://localhost:8080/api/v1/products | jq
+```
+
+### 3. Buat Order (dengan cek stok otomatis)
+```bash
+curl -s -X POST http://localhost:8080/api/v1/orders \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $TOKEN" \
+  -d '{
+    "orderNumber": "ORD-DEMO-001",
+    "productSku": "SKU-LAPTOP-001",
+    "quantity": 2,
+    "amount": 50000000.00
+  }' | jq
+```
+
+### 4. Simulasi Pembayaran via Webhook
+```bash
+# Generate payload + HMAC signature yang valid
+WEBHOOK=$(curl -s -X POST http://localhost:8080/api/v1/orders/ORD-DEMO-001/simulate-webhook \
+  -H "Authorization: Bearer $TOKEN")
+
+SIGNATURE=$(echo $WEBHOOK | jq -r '.valid_signature')
+PAYLOAD=$(echo $WEBHOOK | jq -r '.raw_payload')
+
+# Kirim webhook ke payment service
+curl -i -X POST http://localhost:8080/api/v1/webhooks/payment \
+  -H "Content-Type: application/json" \
+  -H "X-Signature: $SIGNATURE" \
+  -d "$PAYLOAD"
+# Hasil: HTTP 200 → Status order berubah jadi PAID!
+```
+
+### 5. Uji Skenario Keamanan
+```bash
+# Uji: Stok tidak mencukupi (HTTP 422)
+curl -s -X POST http://localhost:8080/api/v1/orders \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $TOKEN" \
+  -d '{"orderNumber":"ORD-FAIL-001","productSku":"SKU-LAPTOP-001","quantity":9999,"amount":1.00}'
+
+# Uji: HMAC signature palsu (HTTP 401)
+curl -i -X POST http://localhost:8080/api/v1/webhooks/payment \
+  -H "Content-Type: application/json" \
+  -H "X-Signature: ini_signature_palsu" \
+  -d '{"transaction_id":"TRX-FAKE","order_number":"ORD-DEMO-001","gross_amount":250000.00,"transaction_status":"settlement"}'
+
+# Uji: Idempotency — kirim webhook yang sama dua kali
+# Hasil: HTTP 200 dengan pesan "Duplicate notification ignored"
+```
+
+---
+
+## 🛠️ Development Lokal (Tanpa Docker)
+
+### Jalankan Hanya Infrastruktur
 ```bash
 docker compose up -d postgres redis
 ```
 
-### 3. Jalankan Aplikasi Spring Boot
+### Jalankan Setiap Service Secara Terpisah
 ```bash
-./mvnw spring-boot:run
+# Di terminal terpisah untuk masing-masing:
+cd auth-service    && ../mvnw spring-boot:run
+cd product-service && ../mvnw spring-boot:run
+cd order-service   && ../mvnw spring-boot:run
+cd payment-webhook-service && ../mvnw spring-boot:run
+cd api-gateway     && ../mvnw spring-boot:run
 ```
 
-### 4. Menjalankan Rangkaian Test Otomatis
+### Menjalankan Unit Test
 ```bash
+# Semua unit test (mengecualikan @Tag("integration"))
 ./mvnw test
+
+# Integration test saja (membutuhkan Docker berjalan)
+./mvnw test -Dgroups=integration
 ```
 
 ---
 
-## 👨‍💻 Profil & Relevansi Industri
-Proyek ini dibuat oleh **Alfaizuna** sebagai portofolio profesional untuk menunjukkan keahlian di bidang:
-* Keamanan Finansial & API Payment Gateway (HMAC, Idempotency, Fraud Prevention)
-* Java 21 & Spring Boot 4 Enterprise Architecture
-* Distributed Caching & Atomicity dengan Redis
-* Database Integrity & Flyway Migration dengan PostgreSQL
-* Automated Testing Standar Global (JUnit 5, Mockito, Testcontainers)
+## 📁 Struktur Project
+
+```
+marketplace-microservices/
+├── pom.xml                          ← Root Multi-Module POM
+├── docker-compose.yml               ← Orkestrasi full microservices
+├── docker/
+│   └── init-dbs.sh                  ← Membuat auth_db, product_db, order_db, payment_db
+│
+├── api-gateway/                     ← Port 8080 — Spring Cloud Gateway
+├── auth-service/                    ← Port 8081 — JWT RS256 Auth
+├── product-service/                 ← Port 8082 — Katalog Produk
+├── order-service/                   ← Port 8083 — Order + Cek Stok
+└── payment-webhook-service/         ← Port 8084 — HMAC + Redis Idempotency
+```
+
+---
+
+## 👨‍💻 Relevansi Industri
+
+Proyek ini mendemonstrasikan keahlian di bidang:
+- **Microservices Architecture** — dekomposisi service yang bersih dengan Maven Multi-Module
+- **API Gateway Pattern** — single entry point dengan Spring Cloud Gateway WebFlux
+- **Keamanan JWT Asimetris** — RS256 dengan pemisahan private/public key antar service
+- **Webhook Security** — HMAC-SHA256, timing-attack resistant, Redis idempotency
+- **Service-to-Service Communication** — Spring 6 RestClient untuk komunikasi internal
+- **Database-per-Service** — PostgreSQL multi-database dengan Flyway migration
+- **Docker Orchestration** — multi-container dengan healthcheck dan dependency ordering
